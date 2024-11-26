@@ -1,0 +1,42 @@
+iname: bench
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+
+jobs:
+  bench:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Install all languages
+      run:
+        apt install clang -y
+        apt install golang -y
+        apt install rust-defaults -y
+        apt install javac -y
+        apt install kotlinc -y
+        apt install dart -y
+        apt install pypy -y
+        apt install r-base -y
+        apt install ruby-defaults -y
+        apt install php-defaults -y
+        apt install npm -y
+        npm install -g bun
+        cargo install deno --locked
+        apt install node -y
+    - name: Run compile.sh
+      run:
+        cd fibonacci && ../compile.sh
+        cd ../loops && ../compile.sh
+    - name: Run fibonacci bench
+      run: |
+        cd ../fibonacci && ../run.sh
+    - name: Run loops bench
+      run: |
+        cd ../loops && ../run.sh
+
+
