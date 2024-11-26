@@ -1,0 +1,38 @@
+name: bench
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+
+jobs:
+  bench:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          ref: ${{ github.head_ref }}
+      - name: Install all languages
+        uses: awalsh128/cache-apt-pkgs-action@latest
+        with:
+          packages: curl clang golang rust-defaults kotlin openjdk-24 pyp r-base ruby-defaults php-defaults npm node
+      - name: Install bun and deno
+        run: |
+          npm install -g bun
+          npm install -g deno-bin
+      - uses: dart-lang/setup-dart@v1
+      - name: Run compile.sh
+        run: |
+          cd fibonacci && ../compile.sh
+          cd ../loops && ../compile.sh
+      - name: Run fibonacci bench
+        run: |
+          cd fibonacci && ../run.sh
+      - name: Run loops bench
+        run: |
+          cd loops && ../run.sh
+
+
