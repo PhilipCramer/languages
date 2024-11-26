@@ -1,0 +1,85 @@
+name: c 
+
+on:
+  pull_request:
+    branches: [ "main" ]
+
+env:
+  MAIN_BRANCH: https://raw.githubusercontent.com/bddicken/languages/refs/heads/main
+  FILE_EXT: c
+  COMPILER: clang
+  COMPILER_FLAGS: -O3
+  RUNTIME: 
+  RUNTIME_PARAMS: 
+
+concurrency:
+  group: ${{ github.event.number }}-${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      test-matrix: ${{ steps.dataStep.outputs.json }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          ref: ${{ github.head_ref }}
+      - uses: awalsh128/cache-apt-pkgs-action@latest
+        with:
+          packages: jq
+      - id: dataStep
+        run: |
+          FILES_CHANGED=$(git diff --name-only --diff-filter=M my-branch..HEAD)
+          echo "json=$(echo $FILES_CHANGED | jq -R '. | {changed_files: .} |.changed_files' | jq -s '. | {changed_files:.}')" >> $GITHUB_OUTPUT
+  compile:
+    needs: setup
+    strategy:
+      matrix:
+        test: ${{ fromJson(needs.setup.outputs.test-matrix) }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          ref: ${{ github.head_ref }}
+      - name: Install language
+        uses: awalsh128/cache-apt-pkgs-action@latest
+        with:
+          packages: curl ${{ env.COMPILER }}
+      - name: Cache Gradle packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ./${{ matrix.test }}/${{ github.workflow }}
+          key: ${{ github.event.number }}-${{ matrix.test }}-${{ github.workflow }}
+      - name: Compile changed ${{ matrix.test }}
+        run: |
+          $COMPILER $COMPILER_FLAGS ${{ matrix.test }}/${{ github.workflow }}/code.$FILE_EXT -o ${{ matrix.test }}/${{ github.workflow }}/new
+      - name: Compile from main
+        run: |
+          curl $MAIN_BRANCH/${{ matrix.test }}/${{ github.workflow }}/code.$FILE_EXT > ${{ matrix.test }}/${{ github.workflow }}/main.$FILE_EXT
+          $COMPILER $COMPILER_FLAGS ${{ matrix.test }}/${{ github.workflow }}/main.$FILE_EXT -o ${{ matrix.test }}/${{ github.workflow }}/main
+  benchmark:
+    needs: 
+      - compile
+      - setup
+    strategy:
+      matrix:
+        test: ${{ fromJson(needs.setup.outputs.test-matrix) }}
+        inputs: [35, 40, 45]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Cache Gradle packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ./${{ matrix.test }}/${{ github.workflow }}
+          key: ${{ github.event.number }}-${{ matrix.test }}-${{ github.workflow }}
+      - name: Benchmark New
+        run: |
+          time -p $RUNTIME $RUNTIME_PARAMS ./${{ matrix.test }}/${{ github.workflow }}/new ${{ matrix.inputs }}
+      - name: Benchmark Main
+        run: |
+          time -p $RUNTIME $RUNTIME_PARAMS ./${{ matrix.test }}/${{ github.workflow }}/main ${{ matrix.inputs }}
